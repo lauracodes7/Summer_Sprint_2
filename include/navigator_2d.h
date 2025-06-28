@@ -42,9 +42,11 @@ public:
     std::string GetClosestWaypointName(const Point2D& current_position);
 
     // Returns the position (Point2D) of the named waypoint
-    Point2D GetWaypointPosition(const std::string& name);
+    Point2D GetWaypointPosition(const std::string& name) const;
 
     double CollectWaypointPower(const std::string& waypoint_name);
+
+    std::vector<std::string> GetAllWaypointNames() const;
 
 private:
 

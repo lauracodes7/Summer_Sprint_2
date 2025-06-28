@@ -4,11 +4,15 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+find_package( OpenCV REQUIRED )
+
 add_executable(mission_planner
   src/distance_cost_estimator.cpp
   src/main.cpp
   src/navigator_2d.cpp
 )
+target_link_libraries(mission_planner ${OpenCV_LIBS})
+
 
 
 # ---===== Fetch GoogleTest =====---

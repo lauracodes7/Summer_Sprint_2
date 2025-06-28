@@ -56,7 +56,7 @@ std::string Navigator2D::GetClosestWaypointName(const Point2D& current_position)
 }
 
 
-Point2D Navigator2D::GetWaypointPosition(const std::string& name) 
+Point2D Navigator2D::GetWaypointPosition(const std::string& name) const
 {
     auto it = waypoints_.find(name);
     if (it == waypoints_.end())
@@ -82,4 +82,15 @@ double Navigator2D::CollectWaypointPower(const std::string& waypoint_name)
     std::cout << "[Navigator 2D] Collected " << collectedPower << " power from waypoint: " << waypoint_name << std::endl;
 
     return collectedPower;
+}
+
+
+std::vector<std::string> Navigator2D::GetAllWaypointNames() const
+{
+    std::vector<std::string> names;
+    for (const auto& entry : waypoints_)
+    {
+        names.push_back(entry.first);
+    }
+    return names;
 }

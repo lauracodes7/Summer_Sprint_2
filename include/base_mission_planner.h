@@ -12,7 +12,8 @@
 class BaseMissionPlanner 
 {
 public:
-    BaseMissionPlanner(Point2D startPosition, BaseCostEstimator* costEstimator, Navigator2D* navigator) : currentPosition_(startPosition), costEstimator_(costEstimator), navigator_(navigator), currentPower_(100.0) 
+
+    BaseMissionPlanner(Point2D startPosition, BaseCostEstimator* costEstimator, Navigator2D* navigator) : currentPosition_(startPosition), currentWaypoint_(navigator->GetClosestWaypointName(startPosition)), costEstimator_(costEstimator), navigator_(navigator), currentPower_(startPosition.power) 
     {
         if (!costEstimator_ || !navigator_) 
         {
@@ -33,6 +34,12 @@ public:
 
             std::string nextWaypoint = GetNextWaypoint(currentWaypoint_, endWaypoint);
 
+            if (nextWaypoint == "") 
+            {
+                std::cout << "[Mission Failed] No valid next waypoint found." << std::endl;
+                return false; // No valid next waypoint, mission failed
+            }
+
             double distance = navigator_->GetDistanceToWaypoint(currentPosition_, nextWaypoint);
 
             if (distance > currentPower_) 
@@ -44,7 +51,7 @@ public:
             TravelTo(nextWaypoint);
 
             // Simulate delay proportional to travel distance
-            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(distance * 100)));
+            // std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(distance * 100)));
         }
 
         std::cout << "[Mission Complete] Reached destination: " << endWaypoint << std::endl;
@@ -82,7 +89,7 @@ protected:
     
     std::string currentWaypoint_;
     
-    double currentPower_ = 100.0;
+    double currentPower_;
 
     BaseCostEstimator* costEstimator_;
     
