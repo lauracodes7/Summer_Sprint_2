@@ -2,6 +2,9 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+#include <random>
+#include <unordered_map>
+#include <chrono>
 
 
 // Internal Includes
@@ -9,9 +12,11 @@
 #include "distance_cost_estimator.h"
 
 
-void RenderEnvironment(Navigator2D& navigator, const std::vector<std::string>& missionTrace)
+void RenderEnvironment(Navigator2D& navigator, const std::vector<std::string>& missionTrace, std::string name = "")
 {
-    const int imgSize = 600;
+    cv::destroyAllWindows(); // Clear any previous windows
+    
+    const int imgSize = 1200;
     const int padding = 50;
     const int scale = 20;  // pixels per unit
     const cv::Scalar backgroundColor(100, 100, 100); // Gray
@@ -56,44 +61,108 @@ void RenderEnvironment(Navigator2D& navigator, const std::vector<std::string>& m
     }
 
     // Show window
-    cv::imshow("Mission Environment", image);
+    cv::imshow("Mission Environment: " + name, image);
     cv::waitKey(0);
 }
 
 
+void AddRandomWaypoints(Navigator2D& navigator, int numWaypoints, unsigned int seed,
+                        double xMin = 0, double xMax = 50,
+                        double yMin = 0, double yMax = 50,
+                        double powerMin = 5, double powerMax = 15)
+{
+    std::mt19937 rng(seed);
+    std::uniform_real_distribution<double> distX(xMin, xMax);
+    std::uniform_real_distribution<double> distY(yMin, yMax);
+    std::uniform_real_distribution<double> distPower(powerMin, powerMax);
+
+    for (int i = 0; i < numWaypoints; ++i)
+    {
+        std::ostringstream nameStream;
+        nameStream << "WP" << i + 1;
+
+        navigator.AddWaypoint(nameStream.str(), Point2D(distX(rng), distY(rng), distPower(rng)));
+    }
+}
+
 
 int main()
 {
-    Navigator2D navigator;
     
-    navigator.AddWaypoint("A", Point2D(3, 4, 5));            
-    navigator.AddWaypoint("B", Point2D(6, 1, 2));         
-    navigator.AddWaypoint("C", Point2D(7, 5, 4));            
-    navigator.AddWaypoint("D", Point2D(10, 3, 5));           
+    // navigator.AddWaypoint("A", Point2D(3, 4, 5));            
+    // navigator.AddWaypoint("B", Point2D(6, 1, 2));         
+    // navigator.AddWaypoint("C", Point2D(7, 5, 4));            
+    // navigator.AddWaypoint("D", Point2D(10, 3, 5));           
+    
+    // navigator.AddWaypoint("E", Point2D(5, 10, 3));           
+    // navigator.AddWaypoint("F", Point2D(13, 7, 5));   
+    // navigator.AddWaypoint("G", Point2D(15, 5, 7));           
+    // navigator.AddWaypoint("H", Point2D(17, 11, 8));         
+    // navigator.AddWaypoint("I", Point2D(18, 18, 1));          
+    // navigator.AddWaypoint("J", Point2D(12, 15, 6));
+    
+    
+    
+    
+    unsigned int runs = 10000;
+    std::unordered_map<std::string, unsigned int> successCount;
+    successCount["random"] = 0;
 
-    navigator.AddWaypoint("E", Point2D(5, 10, 3));           
-    navigator.AddWaypoint("F", Point2D(13, 7, 5));   
-    navigator.AddWaypoint("G", Point2D(15, 5, 7));           
-    navigator.AddWaypoint("H", Point2D(17, 11, 8));         
-    navigator.AddWaypoint("I", Point2D(18, 18, 1));          
-    navigator.AddWaypoint("J", Point2D(12, 15, 6));
-
-    Point2D startPosition(0, 0, 15);
-    Point2D goalPosition(20, 20, 0);
-    navigator.AddWaypoint("START", startPosition);
-    navigator.AddWaypoint("GOAL", goalPosition);
+    std::unordered_map<std::string, double> totalTimeMs;
+    
 
 
-    std::shared_ptr<BaseMissionPlanner> planner = std::make_shared<RandomMissionPlanner>(startPosition, new DistanceCostEstimator(navigator), &navigator);
 
-    planner->ExecuteMission("GOAL");
-
-    std::vector<std::string> missionTrace = planner->GetFullMissionTrace();
-    std::cout << "Mission Trace: ";
-    for (const auto& waypoint : missionTrace) 
+    for (unsigned int i = 0; i < runs; ++i) 
     {
-        std::cout << waypoint << " ";
+        Navigator2D navigator;
+        AddRandomWaypoints(navigator, 20, 1 + i);
+        Point2D startPosition(2, 3, 15);
+        Point2D goalPosition(47, 48, 0);
+        navigator.AddWaypoint("START", startPosition);
+        navigator.AddWaypoint("GOAL", goalPosition);
+
+        std::unordered_map<std::string, std::shared_ptr<BaseMissionPlanner>> planners;
+        planners["random"] = (std::make_shared<RandomMissionPlanner>(startPosition, new DistanceCostEstimator(navigator), &navigator));
+
+        for (auto it = planners.begin(); it != planners.end(); ++it) 
+        {
+            auto startTime = std::chrono::high_resolution_clock::now();
+
+            bool success = (it->second)->ExecuteMission("GOAL");
+
+            auto endTime = std::chrono::high_resolution_clock::now();
+            double durationMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
+            totalTimeMs[it->first] += durationMs;
+
+            if (!success) 
+            {
+                std::cout << "\033[31m[Mission Planner] Mission Failed: " << it->first << "\033[0m" << std::endl;
+            } 
+            else 
+            {
+                successCount[it->first]++;
+                std::cout << "\033[32m[Mission Planner] Mission Success: " << it->first << "\033[0m" << std::endl;
+            }
+
+            RenderEnvironment(navigator, it->second->GetFullMissionTrace(), it->first + " Run " + std::to_string(i + 1));
+
+        }
     }
 
-    RenderEnvironment(navigator, missionTrace);
+    std::cout << "\n\n -----========== Success Rate ==========-----" << std::endl;
+    for (const auto& pair : successCount)
+    {
+        std::cout << pair.first << ": " << pair.second << " / " << runs << " (" << static_cast<double>(pair.second) / runs * 100.0 << "%)" << std::endl;
+    }
+
+    std::cout << "\n\n -----========== Average Runtime (ms) ==========-----" << std::endl;
+    for (const auto& pair : totalTimeMs)
+    {
+        double avgMs = pair.second / runs;
+        std::cout << pair.first << ": " << avgMs << " ms" << std::endl;
+    }
+
+
+    return 0;
 }
